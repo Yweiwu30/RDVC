@@ -7,7 +7,7 @@ print('''--------------------------------------
 | | \ \   | |_/ /     \   /     \ \__
 |_|  \_\  |____/       \_/       \___|
 --------------------------------------''')
-print("Rhythm Doctor Video Converter by 0x4D2\nversion release-1.0")
+print("Rhythm Doctor Video Converter by 0x4D2\nversion release-1.1")
 try:
     print("加载中...")
     import cv2 as c  # 视频处理
@@ -18,6 +18,7 @@ try:
     from tqdm import tqdm  # 进度条
     import zipfile  # 打包rdzip文件
     import os  # 文件处理
+    import time
 except ImportError:
     import pip
     print("检测到部分库未安装，正在安装库...")
@@ -41,7 +42,7 @@ xi = input("输入生成视频的横向分辨率>")
 yi = input("输入生成视频的纵向分辨率>")
 song = input("输入音乐名称(留空默认为文件名)>")
 artist = input("输入作曲家名称(留空默认为文件名)>")
-pic = input("输入铺面预览图文件名(留空默认为视频第1帧)>")
+pic = input("输入谱面预览图文件名(留空默认为视频第1帧)>")
 
 # 处理
 if not song:
@@ -94,15 +95,16 @@ setting = {"version": 54,
 try:  # 视频分辨率/颜色转化
     xi, yi = int(xi), int(yi)
     v = c.VideoCapture(vf)
-    res = []
     fps = v.get(c.CAP_PROP_FPS)
     tf = int(v.get(c.CAP_PROP_FRAME_COUNT))
     fr = 0
+    tmp_name = time.time()
 
     events = [{"bar": 1, "beat": 1, "y": 0, "type": "PlaySong", "filename": vf[:-4]+".mp3",
                "volume": 100, "pitch": 100, "pan": 0, "offset": 0, "bpm": fps*7.5, "loop": False}]
 
     print("转换视频中...")
+    testt = []
     for i in tqdm(range(tf)):
         fr += 1
         f = []
@@ -117,7 +119,7 @@ try:  # 视频分辨率/颜色转化
                     x.append(hex(a[2])[2:].zfill(2)+hex(a[1])
                              [2:].zfill(2)+hex(a[0])[2:].zfill(2))
                 f.append(x)
-            res.append(f)
+            testt.append(f)
         if i == 0 and shot:
             c.imwrite("preview.png", frame)
 
@@ -128,16 +130,19 @@ try:  # 视频分辨率/颜色转化
     audio.write_audiofile(vf[:-4]+".mp3")
 
     # 转换为ogg
-    #audio_ogg = AudioSegment.from_mp3(vf[:-4]+".mp3")
-    #audio_ogg.export(vf[:-4]+".ogg", format="ogg")
+    # audio_ogg = AudioSegment.from_mp3(vf[:-4]+".mp3")
+    # audio_ogg.export(vf[:-4]+".ogg", format="ogg")
 
     # 生成精灵
     print("生成精灵中...")
     with open("pixel.png", "wb+") as f:
         f.write(b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A\x00\x00\x00\x0D\x49\x48\x44\x52\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\x1F\xF3\xFF\x61\x00\x00\x00\x01\x73\x52\x47\x42\x00\xAE\xCE\x1C\xE9\x00\x00\x00\x04\x67\x41\x4D\x41\x00\x00\xB1\x8F\x0B\xFC\x61\x05\x00\x00\x00\x09\x70\x48\x59\x73\x00\x00\x12\x74\x00\x00\x12\x74\x01\xDE\x66\x1F\x78\x00\x00\x00\x22\x49\x44\x41\x54\x38\x4F\x63\x64\x60\x60\xF8\x0F\xC4\x64\x03\x26\x28\x4D\x36\x18\x35\x60\xD4\x00\x10\x18\x35\x60\xE0\x0D\x60\x60\x00\x00\x4D\x40\x01\x1F\x74\x3B\x2E\x9A\x00\x00\x00\x00\x49\x45\x4E\x44\xAE\x42\x60\x82")
 
-    # 生成铺面
-    print("生成铺面中...")
+    # 生成谱面
+    print("生成谱面中...")
+    f = open("main.rdlevel", "w", encoding="utf-8")
+    f.write("{{\"settings\":{},\"rows\":[],\"decorations\":[".format(json.dumps(setting)))
+    del setting
     if xi/yi <= 16/9:
         s = 198 / yi
         sx = (352-s*xi+s) / 7.04
@@ -150,22 +155,26 @@ try:  # 视频分辨率/颜色转化
     for x in range(xi):  # 352*198
         for y in range(yi):
             # 添加精灵
-            decoration.append({"id": str(x*yi+y), "row": str(x*yi+y),
-                              "rooms": [0], "filename": "pixel.png", "depth": 0, "visible": True})
+            f.write(json.dumps({"id": str(x*yi+y), "row": str(x*yi+y),
+                              "rooms": [0], "filename": "pixel.png", "depth": 0, "visible": True}))
+            if x+1 != xi or y+1 != yi:
+                f.write(",")
+    f.write("],\"events\":[")
+    for x in range(xi):
+        for y in range(yi):
             # 添加移动事件
-            events.append({"bar": 1, "beat": 1, "type": "Move", "target": str(
-                x*yi+y), "position": [sx+(s/3.52)*x, sy+(s/1.98)*y], "scale": [scale, scale], "duration": 0, "ease": "Linear"},)
+            f.write(json.dumps({"bar": 1, "beat": 1, "type": "Move", "target": str(
+                x*yi+y), "position": [sx+(s/3.52)*x, sy+(s/1.98)*y], "scale": [scale, scale], "duration": 0, "ease": "Linear"})+",")
 
     bar, beat, r = 1, 1, 0
-    for i in tqdm(range(len(res))):  # 添加涂色事件
+    for i in tqdm(range(len(testt))):  # 添加涂色事件
         for x in range(xi):
             for y in range(yi):
                 if i != 0:
-                    if res[i][yi-y-1][x] == res[i-1][yi-y-1][x]:
+                    if testt[i][yi-y-1][x] == testt[i-1][yi-y-1][x]:
                         continue
-                events.append({"bar": bar, "beat": beat, "type": "Tint", "target": str(x*yi+y), "border": "None", "borderColor": "FFFFFF",
-                               "borderOpacity": 100, "opacity": 100, "tint": True, "tintColor": res[i][yi-y-1][x], "tintOpacity": 100},)
-
+                f.write(json.dumps({"bar": bar, "beat": beat, "type": "Tint", "target": str(x*yi+y), "border": "None", "borderColor": "FFFFFF",
+                               "borderOpacity": 100, "opacity": 100, "tint": True, "tintColor": testt[i][yi-y-1][x], "tintOpacity": 100})+",")
         beat += 0.125
         if beat >= 9:
             beat = 1
@@ -173,17 +182,15 @@ try:  # 视频分辨率/颜色转化
 
     for x in range(xi):
         for y in range(yi):
-            events.append({"bar": bar, "beat": beat, "type": "Tint", "target": str(x*yi+y), "border": "None", "borderColor": "FFFFFF",
-                          "borderOpacity": 100, "opacity": 100, "tint": False, "tintColor": "FFFFFF", "tintOpacity": 100},)
+            f.write(json.dumps({"bar": bar, "beat": beat, "type": "Tint", "target": str(x*yi+y), "border": "None", "borderColor": "FFFFFF",
+                          "borderOpacity": 100, "opacity": 100, "tint": False, "tintColor": "FFFFFF", "tintOpacity": 100})+",")
     for i in range(3):
-        events.append({"bar": bar+1+i, "beat": 1,
-                      "y": 0, "type": "FinishLevel"})
-
-    with open("main.rdlevel", "w", encoding="utf-8") as f:  # 写入.rdlevel文件
-        # f.write(json.dumps(decoration))
-        # f.write("\n")
-        f.write(json.dumps({"settings": setting, "rows": [],
-                "decorations": decoration, "events": events}))
+        f.write(json.dumps({"bar": bar+1+i, "beat": 1,
+                      "y": 0, "type": "FinishLevel"}))
+        if i != 2:
+            f.write(",")
+    f.write("]}")
+    f.close()
 
     print("打包rdzip文件中...")
     rdzip = zipfile.ZipFile(vf[:-4]+".rdzip", mode="w")
